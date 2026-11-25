@@ -28,6 +28,8 @@ export interface Finding {
 
 export interface Report {
   jobId: string;
+  /** Sito analizzato: solo in memoria, scade con il report. */
+  siteUrl?: string;
   scannedAt: string;
   siteType: SiteType;
   cms?: string;

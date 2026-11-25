@@ -1,0 +1,31 @@
+{
+  "name": "@semaforo/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "SCANNER_INTERNAL_URL=http://127.0.0.1:3101 next build && playwright test"
+  },
+  "dependencies": {
+    "@semaforo/shared": "workspace:*",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.1",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/postcss": "4.3.5",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.2",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

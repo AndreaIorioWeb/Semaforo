@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import type { Transporter } from "nodemailer";
 import { ERROR_MESSAGES } from "@semaforo/shared";
 import type { Config } from "./config.js";
 import type { AppContext } from "./context.js";
@@ -8,7 +9,12 @@ import { ScanQueue } from "./jobs/queue.js";
 import { Metrics } from "./metrics.js";
 import { type Db, openDatabase } from "./rate-limit/db.js";
 import { RateLimiter } from "./rate-limit/rate-limiter.js";
+import { createMailer } from "./leads/mailer.js";
+import { LeadService } from "./leads/service.js";
+import { LeadStore } from "./leads/store.js";
+import type { PdfRenderer } from "./pdf/render.js";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerLeadRoutes } from "./routes/lead.js";
 import { registerScanRoutes } from "./routes/scan.js";
 import { type PipelineDeps, runScan, TOTAL_STEPS } from "./scan/pipeline.js";
 import type { SafeFetchOptions } from "./security/safe-fetch.js";
@@ -22,6 +28,9 @@ export interface BuildOptions {
   pipeline?: Omit<PipelineDeps, "fetch" | "onProgress">;
   now?: () => number;
   logger?: boolean;
+  /** Trasporto email alternativo (test). */
+  mailTransport?: Transporter;
+  pdf?: PdfRenderer;
 }
 
 /** Header di sicurezza per le risposte API (HSTS va messo su nginx, dove termina il TLS). */
@@ -95,6 +104,11 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
     { concurrency: config.scanConcurrency, maxWaiting: config.scanMaxQueue, timeoutMs: config.scanTimeoutMs },
   );
 
+  const leadStore = new LeadStore(db, config.leadRetentionHours * 3_600_000, now);
+  const mailer = createMailer(config.smtp, options.mailTransport);
+  if (!mailer.configured) app.log.warn("SMTP non configurato: i lead restano in attesa e vengono cancellati alla scadenza.");
+  const leads = new LeadService(leadStore, mailer, (event) => app.log.info(event));
+
   const ctx: AppContext = {
     config,
     jobs,
@@ -103,6 +117,9 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
     metrics,
     fetch: { userAgent: config.userAgent, ...options.fetch },
     pipeline: { ...options.pipeline },
+    leads,
+    leadStore,
+    ...(options.pdf ? { pdf: options.pdf } : {}),
   };
 
   app.addHook("onSend", async (_request, reply, payload) => {
@@ -132,10 +149,12 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
 
   registerHealthRoutes(app, ctx);
   registerScanRoutes(app, ctx);
+  registerLeadRoutes(app, ctx);
 
   app.addHook("onClose", async () => {
     queue.close();
     jobs.close();
+    leads.close();
     if (!options.db) db.close();
   });
 

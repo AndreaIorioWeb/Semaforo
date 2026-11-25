@@ -19,6 +19,14 @@ const envSchema = z.object({
   DATABASE_PATH: z.string().default("./data/semaforo.sqlite"),
   TRUST_PROXY: bool,
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
+  LEAD_RETENTION_HOURS: z.coerce.number().min(1).max(24 * 365).default(24),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_SECURE: bool,
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+  LEAD_TO: z.string().optional(),
   BROWSER_ENABLED: z.enum(["true", "false", "1", "0"]).default("true").transform((v) => v === "true" || v === "1"),
   CHROMIUM_SANDBOX: bool,
   CHROMIUM_EXECUTABLE_PATH: z.string().optional(),
@@ -38,6 +46,8 @@ export interface Config {
   trustProxy: boolean;
   publicBaseUrl: string;
   userAgent: string;
+  leadRetentionHours: number;
+  smtp: { host?: string; port: number; secure: boolean; user?: string; pass?: string; from?: string; to?: string };
   browserEnabled: boolean;
   chromiumSandbox: boolean;
   chromiumExecutablePath?: string;
@@ -70,6 +80,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: parsed.TRUST_PROXY,
     publicBaseUrl: base,
     userAgent: `SemaforoBot/1.0 (+${base}/metodologia)`,
+    leadRetentionHours: parsed.LEAD_RETENTION_HOURS,
+    smtp: {
+      port: parsed.SMTP_PORT,
+      secure: parsed.SMTP_SECURE,
+      ...(parsed.SMTP_HOST ? { host: parsed.SMTP_HOST } : {}),
+      ...(parsed.SMTP_USER ? { user: parsed.SMTP_USER } : {}),
+      ...(parsed.SMTP_PASS ? { pass: parsed.SMTP_PASS } : {}),
+      ...(parsed.SMTP_FROM ? { from: parsed.SMTP_FROM } : {}),
+      ...(parsed.LEAD_TO ? { to: parsed.LEAD_TO } : {}),
+    },
     browserEnabled: parsed.BROWSER_ENABLED,
     chromiumSandbox: parsed.CHROMIUM_SANDBOX,
     ...(parsed.CHROMIUM_EXECUTABLE_PATH ? { chromiumExecutablePath: parsed.CHROMIUM_EXECUTABLE_PATH } : {}),

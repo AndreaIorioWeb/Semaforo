@@ -16,6 +16,10 @@ export const ERROR_MESSAGES = {
   GLOBAL_RATE_LIMITED: "In questo momento ci sono troppe richieste. Riprova tra qualche minuto.",
   QUEUE_FULL: "Il servizio è occupato, riprova tra poco.",
   JOB_NOT_FOUND: "Questa analisi non esiste o è scaduta. Puoi avviarne una nuova.",
+  LEAD_INVALID: "Controlla i campi del modulo: nome ed email sono obbligatori.",
+  LEAD_CONSENT: "Per inviare la richiesta devi dichiarare di aver letto l'informativa privacy.",
+  LEAD_RATE_LIMITED: "Hai già inviato diverse richieste oggi. Ti risponderò al più presto.",
+  PDF_UNAVAILABLE: "Il PDF non è disponibile in questo momento. Riprova tra poco.",
   INTERNAL: "Si è verificato un errore imprevisto. Riprova tra poco.",
 } as const;
 

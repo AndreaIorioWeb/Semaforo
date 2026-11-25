@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@semaforo/shared/fonts": fileURLToPath(new URL("../../packages/shared/src/fonts.ts", import.meta.url)),
       "@semaforo/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
     },
   },

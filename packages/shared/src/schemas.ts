@@ -29,6 +29,7 @@ export const findingSchema = z.object({
 
 export const reportSchema = z.object({
   jobId: z.string().min(1),
+  siteUrl: z.string().url().optional(),
   scannedAt: z.string().datetime(),
   siteType: siteTypeSchema,
   cms: z.string().optional(),

@@ -6,3 +6,8 @@ export * from "./unverifiable.js";
 export * from "./catalog.js";
 export * from "./vulnerable-libs.js";
 export * from "./risk.js";
+export * from "./prompts.js";
+export * from "./labels.js";
+export * from "./lead.js";
+export * from "./icons.js";
+export * from "./palette.js";

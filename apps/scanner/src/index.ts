@@ -1,5 +1,6 @@
 import { BrowserManager, createBrowserRunner } from "./browser/index.js";
 import { loadConfig } from "./config.js";
+import { createPdfRenderer } from "./pdf/render.js";
 import { buildServer } from "./server.js";
 
 const config = loadConfig();
@@ -14,6 +15,7 @@ const browserManager = config.browserEnabled
 const { app } = await buildServer({
   config,
   pipeline: browserManager ? { browser: createBrowserRunner(browserManager, { botUserAgent: config.userAgent }) } : {},
+  ...(browserManager ? { pdf: createPdfRenderer(browserManager) } : {}),
 });
 
 const shutdown = async (signal: string) => {

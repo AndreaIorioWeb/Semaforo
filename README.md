@@ -4,19 +4,22 @@
 
 Scanner pubblico di conformità e qualità per siti web italiani (privacy, cookie, dati aziendali, vendita online, prontezza pubblica, sicurezza di base). Specifica completa in `SPEC.md`.
 
-**Stato:** Milestone 1, 2 e 3 completate (fondamenta, check statici, browser). Nessuna UI ancora (Milestone 4).
+**Stato:** Milestone 1-4 completate (fondamenta, check statici, browser, interfaccia). Deploy in Milestone 5.
 
 ## Struttura
 
 ```
-apps/scanner      Servizio Node (Fastify): API, anti SSRF, rate limit, coda, SSE, pipeline, check, browser
+apps/web          Sito Next.js 16 + Tailwind 4: home, avanzamento e report, metodologia, privacy, contatti
+apps/scanner      Servizio Node (Fastify): API, anti SSRF, rate limit, coda, SSE, pipeline, check, browser, PDF, lead
   src/security    Guardia anti SSRF e safeFetch
   src/scan        Contesto e pipeline di scansione
   src/browser     Chromium isolato con intercettazione di ogni richiesta
   src/legal       Lettura pagine legali con rispetto di robots.txt
   src/checks      Check COOKIE, PRIV, AZ, VEND, PUB, SEC (uno per modulo, run(ctx) → Finding[])
-  src/prompts     Prompt di correzione con varianti per CMS
-packages/shared   Tipi, schemi Zod, catalogo dei check, tracker, librerie vulnerabili, calcolo rischio
+  src/pdf         Report in PDF (Chromium, JavaScript spento, nessuna rete)
+  src/leads       Modulo contatti: salvataggio temporaneo, invio SMTP, cancellazione
+packages/shared   Tipi, schemi Zod, catalogo dei check, tracker, librerie vulnerabili, rischio,
+                  prompt, etichette, icone, palette, font self-hosted (OFL)
 ```
 
 `apps/web` (Next.js) arriverà con la Milestone 4.
@@ -31,8 +34,11 @@ packages/shared   Tipi, schemi Zod, catalogo dei check, tracker, librerie vulner
 ```bash
 pnpm install
 cp .env.example .env        # opzionale in sviluppo
-pnpm dev                    # avvia lo scanner su http://localhost:3001
+pnpm dev                    # scanner su http://localhost:3001
+pnpm --filter @semaforo/web dev   # sito su http://localhost:3000 (inoltra /api allo scanner)
 ```
+
+Senza SMTP configurato i lead restano in attesa nel database e vengono cancellati alla scadenza (vedi log).
 
 In sviluppo, se `FINGERPRINT_SALT` è vuoto viene generato un salt casuale a ogni avvio (i limiti si azzerano al riavvio). In produzione è obbligatorio.
 
@@ -42,7 +48,8 @@ In sviluppo, se `FINGERPRINT_SALT` è vuoto viene generato un salt casuale a ogn
 | --- | --- |
 | `pnpm dev` | Scanner in watch mode (tsx) |
 | `pnpm test` | Test unitari e d'integrazione (Vitest) |
-| `pnpm test:e2e` | Test e2e con Chromium contro siti fixture locali |
+| `pnpm test:e2e` | Test e2e dello scanner con Chromium contro siti fixture locali |
+| `pnpm --filter @semaforo/web test:e2e` | Build del sito e test e2e: flusso completo, axe WCAG 2.1 AA, privacy del tool, dogfooding |
 | `pnpm --filter @semaforo/scanner bench` | Misura tempi e memoria della scansione con browser |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript senza emissione |
@@ -56,6 +63,8 @@ In sviluppo, se `FINGERPRINT_SALT` è vuoto viene generato un salt casuale a ogn
 | `POST` | `/api/scan` | body `{ "url": "miosito.it", "siteType": "auto" }` → `202 { jobId }`. Errori: `400` URL non valido o bloccato, `429` limite, `503` coda piena |
 | `GET` | `/api/scan/:jobId/events` | SSE con eventi `progress`, `done`, `error` |
 | `GET` | `/api/scan/:jobId` | Report JSON (`202` se ancora in corso, `404` se scaduto) |
+| `GET` | `/api/scan/:jobId/pdf` | Report in PDF (finché il job non scade) |
+| `POST` | `/api/lead` | body `{ name, email, site?, message?, consent: true }` → `202`. Max 5 al giorno per visitatore |
 | `GET` | `/api/health` | Stato, coda e metriche aggregate |
 
 Esempio:
@@ -84,6 +93,10 @@ Gli errori hanno sempre la forma `{ "error": { "code": "...", "message": "messag
 | `BROWSER_ENABLED` | `true` | Chromium per i check COOKIE. Se `false` quei check risultano "non verificabili" |
 | `CHROMIUM_SANDBOX` | `false` | Sandbox di Chromium, da attivare in produzione con un container adatto |
 | `CHROMIUM_EXECUTABLE_PATH` | | Facoltativo |
+| `LEAD_RETENTION_HOURS` | `24` | Ore di conservazione dei lead nel database (inviati o no) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `LEAD_TO` | | Invio dei lead all'autore |
+| `OWNER_NAME`, `OWNER_VAT`, `OWNER_ADDRESS`, `OWNER_EMAIL`, `OWNER_PEC` | | Sito: dati del titolare (footer e privacy). Vuoti = `[PLACEHOLDER]` |
+| `SCANNER_INTERNAL_URL` | `http://127.0.0.1:3001` | Sito: dove inoltrare `/api` in sviluppo e test. **Letto alla build** di Next |
 
 ## Sicurezza del fetcher (SPEC sezione 5)
 
@@ -94,6 +107,14 @@ Ogni richiesta passa da `assertPublicUrl` (`apps/scanner/src/security/guard.ts`)
 3. **Pinning**: `safeFetch` si connette all'IP appena validato, senza nuova risoluzione (difesa dal DNS rebinding). SNI e header `Host` restano quelli del dominio.
 4. **Redirect**: gestiti a mano, max 5, ognuno ricontrollato dai punti 1 a 3.
 5. **Limiti**: 5 MB per risposta (misurati dopo la decompressione), timeout per richiesta e timeout totale.
+
+## Sito (apps/web)
+
+- **Direzione visiva "Carta e inchiostro"**: neutri caldi, un solo accento blu petrolio, titoli in Source Serif 4, testo in Atkinson Hyperlegible. Palette in `packages/shared/src/palette.ts`, contrasti verificati da test (testo ≥ 4.5:1, controlli ≥ 3:1).
+- **Rischio e stati**: rosso, ambra, verde e grigio solo per gli stati, sempre con forma dell'icona diversa e testo.
+- **Privacy del tool**: nessun cookie, nessuno storage, nessuna risorsa esterna, font self-hosted. CSP con nonce per richiesta (`src/proxy.ts`), senza `unsafe-inline`; header di sicurezza in `next.config.ts`; precaricamento dei link disattivato.
+- **Lead**: consenso non preselezionato, campo trappola anti bot, 5 invii al giorno per visitatore, nessuna newsletter, nessun report allegato. Il lead resta nel database al massimo `LEAD_RETENTION_HOURS` (default 24), con nuovi tentativi di invio ogni 10 minuti.
+- **Dogfooding** (test e2e): Semaforo analizza il proprio sito e non deve produrre `ko`. In locale SEC-001 è esclusa perché il test gira in http: la verifica con HTTPS si fa sul dominio reale (Milestone 5).
 
 ## Browser (SPEC sezione 5)
 

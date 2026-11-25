@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { computeRisk, type Finding, type Report, reportSchema, type SiteTypeInput, UNVERIFIABLE_ITEMS } from "@semaforo/shared";
+import { computeRisk, SCAN_STEPS, type Finding, type Report, reportSchema, type SiteTypeInput, UNVERIFIABLE_ITEMS } from "@semaforo/shared";
 import type { BrowserObservation } from "../browser/types.js";
 import { ALL_CHECKS, type Check } from "../checks/index.js";
 import { detectCms, detectTechnologies } from "../detect/cms.js";
@@ -18,15 +18,7 @@ export interface ScanStep {
   label: string;
 }
 
-/** Passi mostrati all'utente (SPEC sezione 3). */
-export const SCAN_STEPS = {
-  fetch: { step: "fetch", label: "Mi collego al sito" },
-  browser: { step: "browser", label: "Apro il sito come un nuovo visitatore" },
-  public: { step: "public", label: "Controllo come appare a Google e ai visitatori" },
-  legal: { step: "legal", label: "Leggo le pagine legali" },
-  security: { step: "security", label: "Controllo la sicurezza di base" },
-  report: { step: "report", label: "Preparo il report" },
-} as const satisfies Record<string, ScanStep>;
+export { SCAN_STEPS };
 
 export const TOTAL_STEPS = Object.keys(SCAN_STEPS).length;
 
@@ -237,6 +229,7 @@ export async function runScan(input: ScanInput, deps: PipelineDeps, signal: Abor
 
   const report: Report = {
     jobId: input.jobId,
+    siteUrl: finalUrl.href,
     scannedAt: new Date().toISOString(),
     siteType: ctx.siteType,
     ...(ctx.cms ? { cms: ctx.cms.name } : {}),

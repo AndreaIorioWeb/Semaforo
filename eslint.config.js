@@ -3,7 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/test/fixtures/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/test/fixtures/**", "**/.next/**", "**/next-env.d.ts", "**/test-results/**", "**/playwright-report/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -20,8 +20,12 @@ export default tseslint.config(
     },
   },
   {
-    // Gli script di misura stampano i risultati a terminale.
-    files: ["**/scripts/**"],
+    files: ["apps/web/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
+    // Gli script di misura e il dogfooding stampano i risultati a terminale.
+    files: ["**/scripts/**", "apps/web/e2e/**"],
     rules: { "no-console": "off" },
   },
 );

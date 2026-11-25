@@ -53,6 +53,25 @@ export function registerScanRoutes(app: FastifyInstance, ctx: AppContext): void 
     return reply.code(202).send({ jobId: job.id, state: job.state });
   });
 
+  app.get("/api/scan/:jobId/pdf", async (request, reply) => {
+    const job = ctx.jobs.get(jobIdParam(request));
+    if (!job) throw new ScanError("JOB_NOT_FOUND");
+    if (job.state !== "done" || !job.report) throw new ScanError("JOB_NOT_FOUND");
+    if (!ctx.pdf) throw new ScanError("PDF_UNAVAILABLE");
+    let pdf: Buffer;
+    try {
+      pdf = await ctx.pdf(job.report);
+    } catch {
+      throw new ScanError("PDF_UNAVAILABLE");
+    }
+    const host = job.report.siteUrl ? new URL(job.report.siteUrl).hostname.replace(/[^a-z0-9.-]/gi, "") : "sito";
+    const date = job.report.scannedAt.slice(0, 10);
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="semaforo-${host}-${date}.pdf"`)
+      .send(pdf);
+  });
+
   app.get("/api/scan/:jobId/events", (request, reply) => {
     const job = ctx.jobs.get(jobIdParam(request));
     if (!job) throw new ScanError("JOB_NOT_FOUND");

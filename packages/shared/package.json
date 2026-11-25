@@ -8,6 +8,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./fonts": {
+      "source": "./src/fonts.ts",
+      "types": "./dist/fonts.d.ts",
+      "default": "./dist/fonts.js"
     }
   },
   "scripts": {

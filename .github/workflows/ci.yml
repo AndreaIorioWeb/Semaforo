@@ -27,3 +27,5 @@ jobs:
       - name: Installa Chromium per i test e2e
         run: pnpm --filter @semaforo/scanner exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - name: Test e2e del sito (flusso, accessibilità, privacy, dogfooding)
+        run: pnpm --filter @semaforo/web test:e2e

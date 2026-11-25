@@ -4,7 +4,8 @@
     "noEmit": true,
     "types": ["node"],
     "paths": {
-      "@semaforo/shared": ["../../packages/shared/src/index.ts"]
+      "@semaforo/shared": ["../../packages/shared/src/index.ts"],
+      "@semaforo/shared/fonts": ["../../packages/shared/src/fonts.ts"]
     }
   },
   "include": ["src", "test", "scripts", "vitest.config.ts", "vitest.e2e.config.ts"]

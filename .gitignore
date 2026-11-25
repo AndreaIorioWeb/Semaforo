@@ -11,3 +11,8 @@ data/
 *.db
 .DS_Store
 e2e-measures.json
+.next/
+next-env.d.ts
+test-results/
+playwright-report/
+*.tsbuildinfo
