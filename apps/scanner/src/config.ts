@@ -15,7 +15,6 @@ const envSchema = z.object({
   SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
   SCAN_MAX_QUEUE: z.coerce.number().int().min(0).default(10),
   SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
-  SCAN_STEP_DELAY_MS: z.coerce.number().int().min(0).default(700),
   FINGERPRINT_SALT: z.string().default(""),
   DATABASE_PATH: z.string().default("./data/semaforo.sqlite"),
   TRUST_PROXY: bool,
@@ -31,7 +30,6 @@ export interface Config {
   scanConcurrency: number;
   scanMaxQueue: number;
   scanTimeoutMs: number;
-  scanStepDelayMs: number;
   fingerprintSalt: string;
   databasePath: string;
   trustProxy: boolean;
@@ -61,7 +59,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     scanConcurrency: parsed.SCAN_CONCURRENCY,
     scanMaxQueue: parsed.SCAN_MAX_QUEUE,
     scanTimeoutMs: parsed.SCAN_TIMEOUT_MS,
-    scanStepDelayMs: parsed.SCAN_STEP_DELAY_MS,
     fingerprintSalt: salt,
     databasePath: parsed.DATABASE_PATH,
     trustProxy: parsed.TRUST_PROXY,

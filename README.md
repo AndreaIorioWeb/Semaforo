@@ -69,7 +69,6 @@ Gli errori hanno sempre la forma `{ "error": { "code": "...", "message": "messag
 | `SCAN_CONCURRENCY` | `1` | Scansioni in parallelo |
 | `SCAN_MAX_QUEUE` | `10` | Job in attesa, oltre risponde 503 |
 | `SCAN_TIMEOUT_MS` | `60000` | Timeout totale di una scansione |
-| `SCAN_STEP_DELAY_MS` | `700` | Solo Milestone 1: pausa tra i passi simulati |
 | `FINGERPRINT_SALT` | | **Obbligatorio in produzione**, almeno 16 caratteri (`openssl rand -hex 32`) |
 | `DATABASE_PATH` | `./data/semaforo.sqlite` | SQLite, solo hash per il rate limit |
 | `TRUST_PROXY` | `false` | `true` dietro nginx, per leggere l'IP reale |

@@ -1,18 +1,41 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { reportSchema } from "@semaforo/shared";
 import { loadConfig } from "../src/config.js";
 import type { AppContext } from "../src/context.js";
 import { buildServer } from "../src/server.js";
 import { fakeResolver, PUBLIC_IP } from "./helpers.js";
+import { fakeTxt, startSites } from "./site-server.js";
 
-const resolver = fakeResolver({
-  "a.it": [PUBLIC_IP],
-  "b.it": [PUBLIC_IP],
-  "www.b.it": [PUBLIC_IP],
-  "c.it": [PUBLIC_IP],
-  "interno.it": ["10.0.0.1"],
+let sites: Awaited<ReturnType<typeof startSites>>;
+const home = { "/": "@static/clean-home.html" };
+
+beforeAll(async () => {
+  sites = await startSites({
+    "a.it": home,
+    "b.it": home,
+    "www.b.it": home,
+    "c.it": home,
+    "lento.it": {
+      "/": (_req, res) => {
+        setTimeout(() => {
+          res.writeHead(200, { "content-type": "text/html" });
+          res.end("<html><body>lento</body></html>");
+        }, 300);
+      },
+    },
+    "bloccato.it": { "/": () => undefined },
+  });
 });
+
+afterAll(async () => sites.server.close());
+
+/** Come il resolver dei siti fixture, più un dominio che risolve a un IP interno. */
+const resolver = (host: string) => {
+  if (host === "interno.it") return fakeResolver({ "interno.it": ["10.0.0.1"] })(host);
+  return sites.resolver(host);
+};
+void PUBLIC_IP;
 
 let app: FastifyInstance | undefined;
 
@@ -20,10 +43,15 @@ async function setup(env: Record<string, string> = {}, now?: () => number) {
   const config = loadConfig({
     FINGERPRINT_SALT: "salt-di-test-lungo-abbastanza-123",
     DATABASE_PATH: ":memory:",
-    SCAN_STEP_DELAY_MS: "0",
     ...env,
   });
-  const built = await buildServer({ config, guard: { resolver }, logger: false, ...(now ? { now } : {}) });
+  const built = await buildServer({
+    config,
+    fetch: { resolver, dial: sites.dial },
+    pipeline: { txtResolver: fakeTxt({ "a.it": ["v=spf1 -all"], "_dmarc.a.it": ["v=DMARC1; p=reject"] }) },
+    logger: false,
+    ...(now ? { now } : {}),
+  });
   app = built.app;
   return built as { app: FastifyInstance; ctx: AppContext };
 }
@@ -77,6 +105,9 @@ describe("API", () => {
     const parsed = reportSchema.parse(report.json());
     expect(parsed.siteType).toBe("shop");
     expect(parsed.unverifiable.length).toBeGreaterThan(0);
+    expect(parsed.findings.find((f) => f.id === "AZ-001")?.status).toBe("ok");
+    expect(parsed.findings.find((f) => f.id === "SEC-003")?.status).toBe("ok");
+    expect(["low", "medium", "high"]).toContain(parsed.risk);
     // L'URL non resta nel job dopo la fine.
     expect(ctx.jobs.get(jobId)?.targetUrl).toBeUndefined();
   });
@@ -147,10 +178,10 @@ describe("API", () => {
   });
 
   it("503 quando la coda è piena, senza consumare quota", async () => {
-    const { app, ctx } = await setup({ SCAN_MAX_QUEUE: "1", SCAN_STEP_DELAY_MS: "200", SCAN_CONCURRENCY: "1" });
-    expect((await scan(app, "a.it", "u1")).statusCode).toBe(202); // in esecuzione
-    expect((await scan(app, "a.it", "u2")).statusCode).toBe(202); // in attesa
-    const full = await scan(app, "a.it", "u3");
+    const { app, ctx } = await setup({ SCAN_MAX_QUEUE: "1", SCAN_CONCURRENCY: "1" });
+    expect((await scan(app, "lento.it", "u1")).statusCode).toBe(202); // in esecuzione
+    expect((await scan(app, "lento.it", "u2")).statusCode).toBe(202); // in attesa
+    const full = await scan(app, "lento.it", "u3");
     expect(full.statusCode).toBe(503);
     expect(full.json()).toMatchObject({ error: { code: "QUEUE_FULL", message: "Il servizio è occupato, riprova tra poco." } });
     await ctx.queue.onIdle();
@@ -185,8 +216,8 @@ describe("API", () => {
   });
 
   it("SSE invia un evento error se la scansione supera il timeout", async () => {
-    const { app } = await setup({ SCAN_TIMEOUT_MS: "1000", SCAN_STEP_DELAY_MS: "400" });
-    const { jobId } = (await scan(app, "a.it")).json() as { jobId: string };
+    const { app } = await setup({ SCAN_TIMEOUT_MS: "1000" });
+    const { jobId } = (await scan(app, "bloccato.it")).json() as { jobId: string };
     const sse = await app.inject({ method: "GET", url: `/api/scan/${jobId}/events` });
     const last = parseSse(sse.body).at(-1);
     expect(last).toMatchObject({ event: "error", data: { code: "TIMEOUT" } });

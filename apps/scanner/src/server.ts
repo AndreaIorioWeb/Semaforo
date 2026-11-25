@@ -5,18 +5,21 @@ import type { AppContext } from "./context.js";
 import { isScanError, ScanError } from "./errors.js";
 import { type Job, JobStore } from "./jobs/job-store.js";
 import { ScanQueue } from "./jobs/queue.js";
-import { runSimulatedScan } from "./jobs/simulated-scan.js";
 import { Metrics } from "./metrics.js";
 import { type Db, openDatabase } from "./rate-limit/db.js";
 import { RateLimiter } from "./rate-limit/rate-limiter.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerScanRoutes } from "./routes/scan.js";
-import type { GuardOptions } from "./security/guard.js";
+import { type PipelineDeps, runScan, TOTAL_STEPS } from "./scan/pipeline.js";
+import type { SafeFetchOptions } from "./security/safe-fetch.js";
 
 export interface BuildOptions {
   config: Config;
   db?: Db;
-  guard?: GuardOptions;
+  /** Opzioni di rete (nei test: resolver finto e dial verso server locali). */
+  fetch?: SafeFetchOptions;
+  /** Dipendenze della pipeline: DNS, browser, lettore pagine legali, check aggiuntivi. */
+  pipeline?: Omit<PipelineDeps, "fetch" | "onProgress">;
   now?: () => number;
   logger?: boolean;
 }
@@ -66,8 +69,19 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
       const started = Date.now();
       jobs.markRunning(job);
       try {
-        const report = await runSimulatedScan(job, jobs, signal, { stepDelayMs: config.scanStepDelayMs });
+        const url = job.targetUrl;
+        if (!url) throw new ScanError("INTERNAL");
+        const { report, timings } = await runScan(
+          { url, siteType: job.siteType, jobId: job.id, expiresAt: job.expiresAt },
+          {
+            ...ctx.pipeline,
+            fetch: ctx.fetch,
+            onProgress: (step, index) => jobs.emit(job, { type: "progress", data: { ...step, index, total: TOTAL_STEPS } }),
+          },
+          signal,
+        );
         jobs.complete(job, report);
+        app.log.info({ event: "scan_timings", ...timings });
         metrics.finished("done", Date.now() - started);
         app.log.info({ event: "scan_finished", outcome: "done", durationMs: Date.now() - started });
       } catch (err) {
@@ -86,7 +100,8 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
     queue,
     rateLimiter,
     metrics,
-    guard: { ...options.guard },
+    fetch: { userAgent: config.userAgent, ...options.fetch },
+    pipeline: { ...options.pipeline },
   };
 
   app.addHook("onSend", async (_request, reply, payload) => {

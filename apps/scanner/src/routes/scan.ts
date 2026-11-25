@@ -23,7 +23,7 @@ export function registerScanRoutes(app: FastifyInstance, ctx: AppContext): void 
     const { url: input, siteType } = parsed.data;
 
     // 1. Validazione sintattica (economica, nessuna rete).
-    const syntactic = parseTargetUrl(input, ctx.guard);
+    const syntactic = parseTargetUrl(input, ctx.fetch);
 
     // 2. Limite: verifica senza consumare, così non si fanno lookup DNS per chi ha già esaurito la quota.
     const fingerprint = visitorFingerprint(request.ip, request.headers["user-agent"] ?? "", ctx.config.fingerprintSalt);
@@ -31,7 +31,7 @@ export function registerScanRoutes(app: FastifyInstance, ctx: AppContext): void 
     throwIfLimited(ctx.rateLimiter.check(fingerprint, site), reply);
 
     // 3. Anti SSRF completo: DNS e IP pubblici.
-    const { url } = await assertPublicUrl(syntactic, ctx.guard);
+    const { url } = await assertPublicUrl(syntactic, ctx.fetch);
 
     // 4. Coda piena: non si consuma quota.
     if (!ctx.queue.hasCapacity()) throw new ScanError("QUEUE_FULL");
