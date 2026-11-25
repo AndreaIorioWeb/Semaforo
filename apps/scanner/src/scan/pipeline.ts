@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { computeRisk, type Finding, type Report, reportSchema, type SiteTypeInput, UNVERIFIABLE_ITEMS } from "@semaforo/shared";
 import type { BrowserObservation } from "../browser/types.js";
-import { STATIC_CHECKS, type Check } from "../checks/index.js";
+import { ALL_CHECKS, type Check } from "../checks/index.js";
 import { detectCms, detectTechnologies } from "../detect/cms.js";
 import { detectSiteType } from "../detect/site-type.js";
 import { isScanError, ScanError } from "../errors.js";
+import { readLegalPages } from "../legal/reader.js";
 import { withFixPrompts } from "../prompts/generator.js";
 import { safeFetch, type SafeFetchOptions, type SafeResponse } from "../security/safe-fetch.js";
 import { parseTargetUrl } from "../security/url-policy.js";
@@ -38,13 +39,14 @@ export type LegalReader = (
   options: { fetch: SafeFetchOptions; signal: AbortSignal; budget: Budget },
 ) => Promise<LegalPage[]>;
 
-/** Check aggiuntivi (Milestone 3: COOKIE e VEND). */
 export interface PipelineDeps {
   fetch: SafeFetchOptions;
   txtResolver?: TxtResolver;
   browser?: BrowserRunner;
+  /** Default: lettura HTTP con rispetto di robots.txt. */
   legalReader?: LegalReader;
-  extraChecks?: readonly Check[];
+  /** Default: tutti i check. */
+  checks?: readonly Check[];
   onProgress?: (step: ScanStep, index: number) => void;
 }
 
@@ -125,7 +127,7 @@ export async function runScan(input: ScanInput, deps: PipelineDeps, signal: Abor
     }
     mark("browser", t);
   } else {
-    notes.push("Controlli su cookie e tracciamento non eseguiti in questa versione.");
+    notes.push("Il browser non è attivo: i controlli su cookie e tracciamento non sono stati eseguiti.");
   }
 
   const ctx = createContext(
@@ -203,18 +205,16 @@ export async function runScan(input: ScanInput, deps: PipelineDeps, signal: Abor
     ctx.siteTypeConfidence = detected.confidence;
   }
 
-  // 6. Pagine legali (Milestone 3).
+  // 6. Pagine legali.
   progress(SCAN_STEPS.legal);
-  if (deps.legalReader) {
-    t = Date.now();
-    try {
-      ctx.legalPages = await deps.legalReader(ctx, { fetch: fetchOpts, signal, budget });
-    } catch {
-      if (signal.aborted) throw new ScanError("TIMEOUT");
-      notes.push("Le pagine legali non sono state lette.");
-    }
-    mark("legal", t);
+  t = Date.now();
+  try {
+    ctx.legalPages = await (deps.legalReader ?? readLegalPages)(ctx, { fetch: fetchOpts, signal, budget });
+  } catch {
+    if (signal.aborted) throw new ScanError("TIMEOUT");
+    notes.push("Le pagine legali non sono state lette.");
   }
+  mark("legal", t);
 
   // 7. DNS per l'email.
   progress(SCAN_STEPS.security);
@@ -224,11 +224,16 @@ export async function runScan(input: ScanInput, deps: PipelineDeps, signal: Abor
 
   // 8-9. Check, rischio, prompt.
   progress(SCAN_STEPS.report);
-  const checks = [...STATIC_CHECKS, ...(deps.extraChecks ?? [])];
+  const checks = deps.checks ?? ALL_CHECKS;
   const findings = runChecks(checks, ctx);
   const promptCtx = { url: finalUrl.href, siteType: ctx.siteType, ...(ctx.cms ? { cms: ctx.cms.name } : {}) };
   const withPrompts = withFixPrompts(findings, promptCtx);
   timings.total = Date.now() - started;
+  if (browser?.memory) {
+    timings.peakMemoryMb = browser.memory.totalMb;
+    timings.chromiumMemoryMb = browser.memory.chromiumMb;
+  }
+  timings.subrequests = budget.count + (browser?.requests.filter((r) => r.outcome === "fetched").length ?? 0);
 
   const report: Report = {
     jobId: input.jobId,

@@ -5,6 +5,7 @@ export class Metrics {
   private scansFailed = 0;
   private rejected: Record<string, number> = {};
   private totalDurationMs = 0;
+  private peakMemoryMb = 0;
 
   started(): void {
     this.scansStarted++;
@@ -14,6 +15,10 @@ export class Metrics {
     if (outcome === "done") this.scansDone++;
     else this.scansFailed++;
     this.totalDurationMs += durationMs;
+  }
+
+  memory(totalMb: number | undefined): void {
+    if (totalMb !== undefined && totalMb > this.peakMemoryMb) this.peakMemoryMb = totalMb;
   }
 
   reject(code: string): void {
@@ -27,6 +32,7 @@ export class Metrics {
       scansDone: this.scansDone,
       scansFailed: this.scansFailed,
       avgDurationMs: completed === 0 ? 0 : Math.round(this.totalDurationMs / completed),
+      peakMemoryMb: this.peakMemoryMb,
       rejected: { ...this.rejected },
     };
   }

@@ -10,3 +10,4 @@ data/
 *.sqlite-journal
 *.db
 .DS_Store
+e2e-measures.json

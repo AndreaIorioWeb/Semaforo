@@ -19,6 +19,9 @@ const envSchema = z.object({
   DATABASE_PATH: z.string().default("./data/semaforo.sqlite"),
   TRUST_PROXY: bool,
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
+  BROWSER_ENABLED: z.enum(["true", "false", "1", "0"]).default("true").transform((v) => v === "true" || v === "1"),
+  CHROMIUM_SANDBOX: bool,
+  CHROMIUM_EXECUTABLE_PATH: z.string().optional(),
 });
 
 export interface Config {
@@ -35,6 +38,9 @@ export interface Config {
   trustProxy: boolean;
   publicBaseUrl: string;
   userAgent: string;
+  browserEnabled: boolean;
+  chromiumSandbox: boolean;
+  chromiumExecutablePath?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -64,5 +70,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: parsed.TRUST_PROXY,
     publicBaseUrl: base,
     userAgent: `SemaforoBot/1.0 (+${base}/metodologia)`,
+    browserEnabled: parsed.BROWSER_ENABLED,
+    chromiumSandbox: parsed.CHROMIUM_SANDBOX,
+    ...(parsed.CHROMIUM_EXECUTABLE_PATH ? { chromiumExecutablePath: parsed.CHROMIUM_EXECUTABLE_PATH } : {}),
   };
 }

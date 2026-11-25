@@ -81,6 +81,7 @@ export async function buildServer(options: BuildOptions): Promise<{ app: Fastify
           signal,
         );
         jobs.complete(job, report);
+        metrics.memory(timings.peakMemoryMb);
         app.log.info({ event: "scan_timings", ...timings });
         metrics.finished("done", Date.now() - started);
         app.log.info({ event: "scan_finished", outcome: "done", durationMs: Date.now() - started });

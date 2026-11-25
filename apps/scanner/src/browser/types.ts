@@ -62,4 +62,6 @@ export interface BrowserObservation {
   durationMs: number;
   /** true se l'attesa di rete inattiva ha raggiunto il tetto massimo. */
   idleTimedOut: boolean;
+  /** Picco di memoria durante l'apertura della pagina (Node + Chromium). */
+  memory?: { nodeMb: number; chromiumMb: number; totalMb: number };
 }

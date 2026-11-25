@@ -3,7 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/test/fixtures/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -18,5 +18,10 @@ export default tseslint.config(
       // I controlli sui caratteri di controllo negli URL sono voluti.
       "no-control-regex": "off",
     },
+  },
+  {
+    // Gli script di misura stampano i risultati a terminale.
+    files: ["**/scripts/**"],
+    rules: { "no-console": "off" },
   },
 );

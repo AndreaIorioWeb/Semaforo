@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Pagina trappola SSRF</title>
+  <script src="http://127.0.0.1:{{PORT}}/segreto-script.js"></script>
+  <script src="http://169.254.169.254/latest/meta-data/segreto-metadata"></script>
+  <script src="https://interno.it/segreto-dns-privato.js"></script>
+  <script src="http://[::1]:{{PORT}}/segreto-ipv6.js"></script>
+  <script src="http://pubblico-redirect.it/redirect.js"></script>
+  <link rel="stylesheet" href="http://localhost:{{PORT}}/segreto-css">
+</head>
+<body>
+  <h1>Trappola</h1>
+  <img src="http://127.0.0.1:{{PORT}}/segreto-img" alt="">
+  <iframe src="http://10.0.0.1/segreto-iframe"></iframe>
+  <script>
+    fetch("http://127.0.0.1:{{PORT}}/segreto-fetch").catch(function () {});
+    fetch("https://trappola.it/api/segreto-post", { method: "POST", body: "dati" }).catch(function () {});
+    try { new WebSocket("ws://127.0.0.1:{{PORT}}/segreto-ws"); } catch (e) {}
+    var x = new XMLHttpRequest(); x.open("GET", "http://0.0.0.0:{{PORT}}/segreto-xhr"); x.send();
+    setTimeout(function () { location.href = "http://127.0.0.1:{{PORT}}/segreto-navigazione"; }, 50);
+  </script>
+</body>
+</html>

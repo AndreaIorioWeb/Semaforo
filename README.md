@@ -4,13 +4,19 @@
 
 Scanner pubblico di conformità e qualità per siti web italiani (privacy, cookie, dati aziendali, vendita online, prontezza pubblica, sicurezza di base). Specifica completa in `SPEC.md`.
 
-**Stato:** Milestone 1 (fondamenta). La scansione è **simulata**: nessun check reale sul sito, nessuna UI.
+**Stato:** Milestone 1, 2 e 3 completate (fondamenta, check statici, browser). Nessuna UI ancora (Milestone 4).
 
 ## Struttura
 
 ```
-apps/scanner      Servizio Node (Fastify): API, anti SSRF, rate limit, coda, SSE
-packages/shared   Tipi, schemi Zod, messaggi di errore in italiano
+apps/scanner      Servizio Node (Fastify): API, anti SSRF, rate limit, coda, SSE, pipeline, check, browser
+  src/security    Guardia anti SSRF e safeFetch
+  src/scan        Contesto e pipeline di scansione
+  src/browser     Chromium isolato con intercettazione di ogni richiesta
+  src/legal       Lettura pagine legali con rispetto di robots.txt
+  src/checks      Check COOKIE, PRIV, AZ, VEND, PUB, SEC (uno per modulo, run(ctx) → Finding[])
+  src/prompts     Prompt di correzione con varianti per CMS
+packages/shared   Tipi, schemi Zod, catalogo dei check, tracker, librerie vulnerabili, calcolo rischio
 ```
 
 `apps/web` (Next.js) arriverà con la Milestone 4.
@@ -35,13 +41,15 @@ In sviluppo, se `FINGERPRINT_SALT` è vuoto viene generato un salt casuale a ogn
 | Comando | Cosa fa |
 | --- | --- |
 | `pnpm dev` | Scanner in watch mode (tsx) |
-| `pnpm test` | Tutti i test (Vitest) |
+| `pnpm test` | Test unitari e d'integrazione (Vitest) |
+| `pnpm test:e2e` | Test e2e con Chromium contro siti fixture locali |
+| `pnpm --filter @semaforo/scanner bench` | Misura tempi e memoria della scansione con browser |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript senza emissione |
 | `pnpm build` | Compila `packages/shared` e `apps/scanner` in `dist/` |
 | `pnpm --filter @semaforo/scanner start` | Avvia la build compilata |
 
-## API (Milestone 1)
+## API
 
 | Metodo | Percorso | Risposta |
 | --- | --- | --- |
@@ -73,6 +81,9 @@ Gli errori hanno sempre la forma `{ "error": { "code": "...", "message": "messag
 | `DATABASE_PATH` | `./data/semaforo.sqlite` | SQLite, solo hash per il rate limit |
 | `TRUST_PROXY` | `false` | `true` dietro nginx, per leggere l'IP reale |
 | `PUBLIC_BASE_URL` | `http://localhost:3000` | Usato nello user agent `SemaforoBot/1.0 (+URL/metodologia)` |
+| `BROWSER_ENABLED` | `true` | Chromium per i check COOKIE. Se `false` quei check risultano "non verificabili" |
+| `CHROMIUM_SANDBOX` | `false` | Sandbox di Chromium, da attivare in produzione con un container adatto |
+| `CHROMIUM_EXECUTABLE_PATH` | | Facoltativo |
 
 ## Sicurezza del fetcher (SPEC sezione 5)
 
@@ -83,6 +94,32 @@ Ogni richiesta passa da `assertPublicUrl` (`apps/scanner/src/security/guard.ts`)
 3. **Pinning**: `safeFetch` si connette all'IP appena validato, senza nuova risoluzione (difesa dal DNS rebinding). SNI e header `Host` restano quelli del dominio.
 4. **Redirect**: gestiti a mano, max 5, ognuno ricontrollato dai punti 1 a 3.
 5. **Limiti**: 5 MB per risposta (misurati dopo la decompressione), timeout per richiesta e timeout totale.
+
+## Browser (SPEC sezione 5)
+
+- Un Chromium condiviso, **contesto nuovo per ogni scansione** (nessun cookie o storage passa tra scansioni), download disattivati, service worker bloccati, nessun permesso, popup e dialog chiusi.
+- **Ogni richiesta del browser è intercettata e servita da `safeFetch`**: stessi controlli anti SSRF, IP pinnato, limiti di dimensione e tempo. Il resolver DNS di Chromium è disattivato (`--host-resolver-rules`), quindi niente può uscire senza passare dall'intercettazione.
+- I redirect non vengono mai restituiti al browser (Chromium li seguirebbe senza ripassare dall'intercettazione): li segue `safeFetch` ricontrollando ogni salto.
+- Solo osservazione passiva: POST e beacon sono annotati ma **mai inoltrati**, WebSocket chiusi, nessun clic sul banner.
+- Massimo 50 sottorisorse scaricate (immagini, font e media sono solo annotati), massimo 6 pagine legali, `robots.txt` rispettato per le pagine non principali.
+
+## Misure (siti fixture locali, Chromium 158)
+
+| Misura | Valore |
+| --- | --- |
+| Durata scansione completa | ~1,4 s (mediana), max ~1,5 s |
+| Picco memoria totale (Node + Chromium) | ~600 MB (max 617 MB) |
+| Chromium a riposo, browser già avviato | ~320 MB |
+
+La memoria di Chromium è la somma dell'RSS dei suoi processi (sovrastima la memoria condivisa). Su siti reali i tempi crescono con la rete: il timeout totale resta `SCAN_TIMEOUT_MS`. Per il compose (Milestone 5) un `mem_limit` di almeno 1 GB per lo scanner è un punto di partenza ragionevole.
+
+## Aggiornare le liste
+
+- **Tracker, CDN e incorporamenti**: `packages/shared/src/trackers.ts` (domini, percorsi di invio dati, nomi dei cookie, parole chiave per la cookie policy).
+- **Librerie vulnerabili**: `packages/shared/src/vulnerable-libs.ts` (prima versione corretta e advisory). Aggiorna anche `WORDPRESS_MIN_RECOMMENDED` a ogni rilascio maggiore di WordPress.
+- **Catalogo dei check e fonti normative**: `packages/shared/src/catalog.ts`. Tutti i riferimenti normativi vanno riverificati prima della pubblicazione.
+
+Dopo ogni modifica: `pnpm test && pnpm test:e2e`.
 
 ## Privacy dei dati di servizio
 
